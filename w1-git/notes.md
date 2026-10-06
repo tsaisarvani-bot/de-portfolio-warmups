@@ -1,3 +1,4 @@
+# Git Notes (main version)
 Four terms to know first:
 
 Branch: a different copy of the main where changes can be made without affecting the main.
