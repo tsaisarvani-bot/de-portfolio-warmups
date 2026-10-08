@@ -50,3 +50,35 @@ Host `localhost`, port `5432`, database `warmups`, user `de`. This works because
 
 ## Note on passwords
 The password is in plain text here because this is a local practice database. In real projects, credentials go in a `.env` file that is listed in `.gitignore`, or in a secrets manager, and never in Git.
+
+## Part 2: Docker Compose
+
+1. What problem does Docker Compose solve compared with docker run?
+With docker run, you type a long command for each container and have to remember every flag. With several services, you'd also have to start them in the right order and connect them yourself. Compose puts all of that in one file, docker-compose.yml, so docker compose up -d starts everything and docker compose down stops everything. Because the setup lives in a file, it's saved in Git and anyone can rerun it exactly.
+
+Interview line: "Compose turns a multi-container setup into a single, version-controlled file you can start with one command."
+
+2. Why does pgAdmin use postgres as the host instead of localhost?
+Each container has its own localhost, which means "this container." Inside pgAdmin's container, localhost points to pgAdmin itself, where no database is running. Compose puts all services on a shared network where they find each other by service name, so pgAdmin reaches the database at postgres. DBeaver uses localhost:5432 because it runs on your laptop, not inside a container, and the port mapping connects your laptop to the container.
+
+Interview line: "Containers talk to each other by service name on the Compose network; localhost inside a container means the container itself."
+
+3. What happened to p4 after down, and after down -v? Why?
+After down, p4 survived. down removes the containers and network but keeps the volume, where Postgres stores its data, so the new container reattached to the same data.
+After down -v, p4 was gone. -v also deletes the volume, so Postgres started with empty storage and the init script recreated only p1–p3. p4 was added by hand and wasn't in any script, so nothing could bring it back.
+
+Interview line: "Containers are disposable; volumes hold the state. down -v deletes the state."
+
+4. Why did pgAdmin forget your server after down?
+pgAdmin saves your login and registered servers inside its own container. The compose file gave Postgres a volume, but not pgAdmin. When down deleted the pgAdmin container, those settings were deleted with it. Adding a volume for pgAdmin (for example pgadmin_data:/var/lib/pgadmin) would make them persist.
+
+Interview line: "Any data a container needs to keep must be on a volume. Otherwise it's lost when the container is removed."
+
+5. What do healthcheck and depends_on do?
+healthcheck tells Docker how to check whether Postgres is actually ready. Every 5 seconds it runs pg_isready, and the container shows healthy only when Postgres accepts connections.
+depends_on with condition: service_healthy makes pgAdmin wait to start until Postgres passes that check. Without the condition, Compose only waits for the Postgres container to start, which happens several seconds before the database is ready to take connections.
+
+Interview line: "Healthchecks define 'ready', and depends_on with service_healthy enforces startup order based on that, not just on the container existing."
+
+6. Why is .env kept out of Git while .env.example is committed?
+.env holds real secrets: usernames and passwords. Anything pushed to a public repo can be seen and copied by anyone, and it stays in the Git history even if you delete it later. .env.example has the same variable names with empty values. It tells someone cloning the repo which settings they need, without exposing yours. They copy it to .env and fill in their own values.
