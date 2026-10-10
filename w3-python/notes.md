@@ -38,3 +38,41 @@ sensitive ones as early as possible, before data spreads to other tables or file
 - Birthdates in the future: 0
 - Death date before birth date: 0
 - Duplicate patient IDs: 0
+
+## Part 2: Age bands and Parquet
+
+### Why I moved from a notebook to a script
+A notebook is good for exploring: I could run one cell at a time and look at the
+output. But a pipeline needs code that runs top to bottom with one command and
+gives the same result every time. I split the logic into functions (load, clean,
+add age band, summarize) so each step does one job, can be reused, and can be
+tested on its own in W6. `if __name__ == "__main__"` means the script only runs
+when called directly, not when another file imports its functions.
+
+### CSV vs Parquet (measured)
+- CSV: 0.34 MB → Parquet: 0.14 MB, about 2.4× smaller.
+- Caveat: this isn't a pure format comparison. The Parquet file is missing the
+  7 PII columns I dropped, and it has 3 new ones (is_deceased, age, age_band).
+  Also, on a file this small, Parquet's fixed metadata overhead is a big share
+  of the size. On larger data the savings are usually much bigger.
+- Parquet stores data by column instead of by row. Values in one column are
+  similar (all dates, all "M"/"F"), so they compress well.
+- Parquet also stores each column's data type. When I reloaded the CSV, dates
+  came back as text and needed converting again. Parquet gave back
+  `datetime64` straight away.
+- Query engines can read only the columns a query needs, instead of whole rows.
+
+### Why age uses the death date for deceased patients
+A deceased patient's age should stop at their death. If I measured everyone up
+to today, someone born in 1920 who died in 1990 would show as 100+ instead of 70.
+That would push them into the wrong age band and skew the summary. So:
+end date = death date if it exists, otherwise today.
+
+### What partitioning is and when it helps
+Partitioning splits the output into folders by a column's value, such as
+`gender=F/` and `gender=M/`. A query that filters on that column (for example
+`WHERE gender = 'F'`) can skip the other folders entirely, so it reads less data
+and runs faster. It helps most on large tables, with columns that are often used
+in filters and have a small number of distinct values, such as date, region, or
+gender. Partitioning on a column with thousands of distinct values, like patient
+ID, creates lots of tiny files and makes things slower.
