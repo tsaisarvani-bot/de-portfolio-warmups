@@ -69,3 +69,18 @@ failure code. That gives me:
 - no partially built staging layer that looks finished but isn't,
 - a non-zero exit code, so an orchestrator like Airflow (W9) marks the task
   as failed instead of reporting success.
+
+  ## Part 2: SQL questions 1–5
+
+### Key findings
+- **Q1 (patients by gender):** 616 female and 547 male patients; 73 and 90 of them are deceased.
+- **Q2 (top diseases):** the most common diagnosed disease is Viral sinusitis, affecting 739 patients. Second is Acute viral pharyngitis (506 patients).
+- **Q3 (encounter classes):** inpatient encounters cost the most on average $8766.00, compared with $1909.49 for wellness visits. Wellness is the most frequent class (24038 encounters).
+- **Q4 (top providers):** the busiest provider (specialty: GENERAL PRACTICE) saw 72 distinct patients across 1020 encounters.
+- **Q5 (diseases among patients 65+):** the top disease is Viral sinusitis (196 patients). For under-18s, the top disease is also Viral sinusitis (80 patients).
+
+### Why Q2 needed the `(disorder)` filter
+The conditions table mixes real diagnoses with social and administrative findings, such as "Full-time employment (finding)". Without the filter, the top 10 was dominated by ___ rather than actual diseases. Lesson: look at the raw values before aggregating, or the "insight" is noise.
+
+### Fan-out
+Joining patients (one row each) to encounters (many rows each) repeats every patient once per encounter. My gender counts jumped from 547 to 25926 rows for male and 616 to 35533 rows for female. `count(*)` counts joined rows, not patients. Fix: `count(DISTINCT p.patient_id)`, which brought the counts back to match Q1. In a real pipeline, this bug silently inflates metrics such as patient counts or revenue.
